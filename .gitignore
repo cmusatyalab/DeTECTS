@@ -18,3 +18,9 @@ gradio_UX.py
 # dataset
 **/data/
 data.tar
+
+# annotations
+**/annotations/
+
+# secrets
+.env

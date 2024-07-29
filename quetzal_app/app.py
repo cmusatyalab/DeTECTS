@@ -15,9 +15,11 @@ import argparse
 import torch
 
 from threading import Lock
-from streamlit.web.server.websocket_headers import _get_websocket_headers
 import os
 from pathlib import Path
+
+import streamlit_elements
+import re
 
 LOGO_FILE = os.path.normpath(Path(__file__).parent.joinpath("quetzal_logo_trans.png"))
 
@@ -142,7 +144,7 @@ def parse_args():
 
 
 dataset_root, meta_data_root, cuda_device, torch_device, user = parse_args()
-headers = _get_websocket_headers()
+headers = st.context.headers
 # user = headers.get("X-Forwarded-User", user)
 user = user
 
@@ -225,6 +227,36 @@ if "page_states" not in ss:
     ss.lock = Lock()
 
 
+# script to fix compatibility issues for streamlit_elements with newer streamlit versions
+# **Note, will have to restart application if a broken import is fixed
+def patch_streamlit_elements():
+
+    # issue: https://github.com/okld/streamlit-elements/issues/35
+    relative_file_path = 'core/callback.py'
+    library_root = list(streamlit_elements.__path__)[0]
+    file_path = os.path.join(library_root, relative_file_path)
+
+    # Read broken file
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    broken_import = 'from streamlit.components.v1 import components'
+    fixed_import = 'from streamlit.components.v1 import custom_component as components\n'
+
+    # Fix broken import line
+    for index, line in enumerate(lines):
+
+        if re.match(broken_import, line):
+            print(f'Replaced broken import in {file_path}, please restart application.')
+            lines[index] = fixed_import
+
+    # Update broken file with fix
+    with open(file_path, 'w') as file:
+        file.writelines(lines)
+
+
+if __name__ == "__main__":
+    patch_streamlit_elements()
 # import pickle
 # from quetzal.dtos.video import DatabaseVideo, QueryVideo
 # with open("../test_matches.pkl", 'rb') as f:

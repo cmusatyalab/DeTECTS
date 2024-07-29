@@ -187,13 +187,14 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         labels = detections[1]
         detections = detections[0]
 
-        detections.mask = self._segment(
+        
+
+        if show_background:
+            detections.mask = self._segment(
             sam_predictor=self.sam_predictor,
             image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
             xyxy=detections.xyxy,
-        )
-
-        if show_background:
+            )
             # annotate image with detections
             annotated_image = self.mask_annotator.annotate(
                 scene=image.copy(), detections=detections
@@ -209,7 +210,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         xyxy_relative = [absolute_to_relative(bbox, width, height) for bbox in detections.xyxy]
 
         return annotated_image, xyxy_relative, labels
-    def generate_segmented_images(self, query_image: str, save_file_path: str, xyxy: np.ndarray, output_width: int, output_height: int):
+    def generate_segmented_images(self, query_image: str, save_file_path: str, xyxy: np.ndarray):
         """
         Generates segmented image given bounding boxes
 
@@ -236,10 +237,11 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             )
 
             scaled_mask = []
-            # scale image to fit annotation window
-            for m in mask:
-                scaled_mask.append(skimage.transform.resize(m, (output_height, output_width), order=0, preserve_range=True, anti_aliasing=False))
-            mask = np.array(scaled_mask)
+            # scale image for efficient storage in page state 
+            # for m in mask:
+            #     scaled_mask.append(skimage.transform.resize(m, (512, 512), order=0, preserve_range=True, anti_aliasing=False))
+            # mask = np.array(scaled_mask)
+            
             # mask = np.logical_or.reduce(mask).astype(int)
   
             # mask_image = (mask * 255).astype(np.uint8)
@@ -273,7 +275,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         # combine two masks and save as gray scale image
         combine_mask = np.logical_or(query_mask, db_mask).astype(np.uint8)
         mask_image = (combine_mask * 255).astype(np.uint8)
-        cv2.imwrite(save_file_path, mask_image)
+        # cv2.imwrite(save_file_path, mask_image)
 
         return mask_image
 

@@ -9,9 +9,11 @@ from streamlit import session_state as ss
 from streamlit_elements import elements, mui
 from streamlit_extras.stylable_container import stylable_container
 from streamlit_tags import st_tags
-import torch
 import json
-import cv2
+import base64
+from dotenv import load_dotenv
+
+from openai import OpenAI
 
 from quetzal.align_frames import DatabaseIdx, Match, QueryIdx
 from quetzal.engines.detection_engine.grounding_sam_engine import GroundingSAMEngine
@@ -39,6 +41,10 @@ QUERY_ANNOTATE_IMG = str(
 )
 DB_ANNOTATE_IMG = str(Path(__file__).parent.joinpath("../tmp/quetzal_annotated_db.jpg"))
 
+ANNOTATE_SAVE_PATH = str(
+    Path(__file__).parent.joinpath("../annotations")
+)
+
 ## List of Object Detector to Use
 DetectorName = NewType("DetectorName", str)
 
@@ -47,6 +53,9 @@ detector_dict: dict[DetectorName, ObjectDetectionEngine] = {
     model.name: model for model in detector_list
 }
 
+## Open_AI API setup
+load_dotenv("/home/ubuntu/private/quetzal_dev/quetzal/quetzal_app/page/.env")
+client = OpenAI()
 
 @st.cache_resource
 def getDetectionEngine(detector: DetectorName, torch):
@@ -134,6 +143,7 @@ class PlaybackController(Controller):
     def change_slider(self, val=0):
         self.set_slider(ss[SLIDER_KEY] + val)
         self.page_state[PLAY_IDX_KEY] = ss[SLIDER_KEY]
+        self.page_state[PlaybackController.name][SLIDER_KEY] = ss[SLIDER_KEY]
 
     def toggle_play(self):
         ss[PLAYBACK_KEY] = not ss[PLAYBACK_KEY]
@@ -522,16 +532,17 @@ class ObjectAnnotationController(Controller):
         self.labels_query = None
         self.detections_database = None
         self.labels_database = None
+
         self.mask_query = None
         self.mask_db = None
+        
         self.is_query = lambda x : x["label_names"][-1:] == 'q' 
         self.is_db = lambda x : x["label_names"][-2:] == 'db'
-        self.initObjectAnnotationController()
 
         # page_state[self.name][DETECTOR_NAME_KEY] = GroundingSAMEngine.name
 
     def _run_detection(
-        self, text_prompt, input_img, output_file, box_threshold, text_threshold, isQuery
+        self, text_prompt, input_img, output_file, box_threshold, text_threshold, isQuery, idx
     ):
         detector: ObjectDetectionEngine = self.page_state[self.name][DETECTOR_KEY]
         if isQuery:
@@ -540,20 +551,24 @@ class ObjectAnnotationController(Controller):
             )
 
         else:
-            _, self.detections_database, self.labels_database = detector.generate_masked_images(
+            _, self.detections_database, self.labels_database, = detector.generate_masked_images(
                 input_img, text_prompt, output_file, box_threshold, text_threshold, False
             )
 
     def run_detection(self):
+        print("Running detection...")
         match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
         query_idx: QueryIdx = match[0]
         db_idx: DatabaseIdx = match[1]
+
+        idx = self.page_state[PLAY_IDX_KEY] 
+
         if self.page_state.warp:
             query_img_orig = self.page_state.warp_query_frames[query_idx]
         else:
             query_img_orig = self.page_state.query_frames[query_idx]
         database_img_aligned = self.page_state.db_frames[db_idx]
-
+    
         self._run_detection(
             text_prompt=ss[CLASS_PROMPT_KEY],
             input_img=query_img_orig,
@@ -561,6 +576,7 @@ class ObjectAnnotationController(Controller):
             box_threshold=ss[SLIDER_BOX_TH_KEY],
             text_threshold=ss[SLIDER_TXT_TH_KEY],
             isQuery=True,
+            idx=idx
         )
 
         self._run_detection(
@@ -570,7 +586,10 @@ class ObjectAnnotationController(Controller):
             box_threshold=ss[SLIDER_BOX_TH_KEY],
             text_threshold=ss[SLIDER_TXT_TH_KEY],
             isQuery=False,
+            idx=idx
         )
+        # print("Index: " , idx)
+        # print(self.detections_query)
 
         self.page_state.annotated_frame = {
             "query": QUERY_ANNOTATE_IMG,
@@ -581,29 +600,29 @@ class ObjectAnnotationController(Controller):
             "labels_db": self.labels_database,
             "mask_query": [],
             "mask_db" : [],
-            "idx": self.page_state[PlaybackController.name][SLIDER_KEY],
+            "idx": idx,
         }
-
-        self.page_state.is_segment = False
-
+        st.session_state.new_detection = True
 
 
     def _segment_annotation(self, input_img, output_file, xyxy, isQuery):
         detector: ObjectDetectionEngine = self.page_state[self.name][DETECTOR_KEY]
         if isQuery:
             self.annotated_image_query, self.mask_query = detector.generate_segmented_images(
-                input_img, output_file, xyxy, st.session_state.image_size[0], st.session_state.image_size[1]
+                input_img, output_file, xyxy
             )
 
         else:
             self.annotated_image_db, self.mask_db = detector.generate_segmented_images(
-                input_img, output_file, xyxy, st.session_state.image_size[0], st.session_state.image_size[1]
+                input_img, output_file, xyxy
             )
 
     def segment_annotation(self):
+            print("Running Segmentation...")
             match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
             query_idx: QueryIdx = match[0]
             db_idx: DatabaseIdx = match[1]
+
             if self.page_state.warp:
                 query_img_orig = self.page_state.warp_query_frames[query_idx]
             else:
@@ -627,7 +646,7 @@ class ObjectAnnotationController(Controller):
 
             self._segment_annotation(
                 input_img=database_img_aligned,
-                output_file=DB_ANNOTATE_IMG,
+                output_file=DB_ANNOTATE_IMG, 
                 xyxy=xyxy_db,
                 isQuery=False,
             )
@@ -643,26 +662,70 @@ class ObjectAnnotationController(Controller):
                 "mask_db" : self.mask_db,
                 "idx": self.page_state[PlaybackController.name][SLIDER_KEY],
             }
+            st.session_state.new_segment = True
 
-            self.page_state.is_segment = True
+
+
 
     def save_annotation(self):
         detector: ObjectDetectionEngine = self.page_state[self.name][DETECTOR_KEY]
+        match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
+        query_idx: QueryIdx = match[0]
+        db_idx: DatabaseIdx = match[1]
+        query_img_orig = self.page_state.query_frames[query_idx]
+        database_img_aligned = self.page_state.db_frames[db_idx]
 
-        mask_query = list(filter(self.is_query, st.session_state.seg_result))
-        mask_db = list(filter(self.is_db, st.session_state.seg_result))
-
-        mask_query = [item['masks'] for item in mask_query]
-        mask_db = [item['masks'] for item in mask_db]
-        # Procedure: compare boxes and cancel out significant overlaps
-        detector.save_segmented_masks(mask_query, mask_db, DB_ANNOTATE_IMG)
-        detector.save_segmented_masks(mask_query, mask_db, QUERY_ANNOTATE_IMG)
+        query = list(filter(self.is_query, st.session_state.result))
+        db = list(filter(self.is_db, st.session_state.result))
         
+        xyxy_query = [{"bbox": item['bboxes'], "label": item['label_names']}  for item in query]
+        xyxy_db = [{"bbox": item['bboxes'], "label": item['label_names']} for item in db]
+
+        # self._segment_annotation(
+        #         input_img=query_img_orig,
+        #         output_file=QUERY_ANNOTATE_IMG,
+        #         xyxy=xyxy_query,
+        #         isQuery=True,
+        #     )
+
+        # self._segment_annotation(
+        #     input_img=database_img_aligned,
+        #     output_file=DB_ANNOTATE_IMG, 
+        #     xyxy=xyxy_db,
+        #     isQuery=False,
+        # )
+        # mask_query = list(filter(self.is_query, st.session_state.seg_result))
+        # mask_db = list(filter(self.is_db, st.session_state.seg_result))
+        
+        # mask_query = [item['masks'] for item in mask_query]
+        # mask_db = [item['masks'] for item in mask_db]
+        
+        # mask_image = detector.save_segmented_masks(self.mask_query, self.mask_db, "")
+        # Function to encode an image
+        def encode_image(image_path):
+            with open(image_path, "rb") as image_file:  
+                return base64.b64encode(image_file.read()).decode('utf-8')  
+            
+        base64_query = encode_image(query_img_orig)
+        base64_db = encode_image(database_img_aligned)
+
+        save_json = {
+                    #  "mask_combined": mask_image.tolist(),
+                    #  "annotated_query": self.annotated_image_query.tolist(),
+                    #  "annotated_db": self.annotated_image_db.tolist(),
+                    #  "mask_query": self.mask_query.tolist(),
+                    #  "mask_db": self.mask_db.tolist(),
+                    #  "caption": caption, 
+                    "image_query": base64_query,
+                    "image_db": base64_db,
+                    "bboxes_query": xyxy_query, 
+                    "bboxes_db": xyxy_db}
+        # detector.save_segmented_masks(mask_query, mask_db, QUERY_ANNOTATE_IMG)
+        # save format: {video_title}_{query_frame_idx}_{db_frame_idx}
+        with open(f"{ANNOTATE_SAVE_PATH}/quetzal_annotated_{query_idx}_{db_idx}.json", "w") as outfile:
+            json.dump(save_json, outfile)
 
     
-
-        
-
     def render_prompt(self):
         c1, c2 = st.columns([100, 1])
 
@@ -730,9 +793,8 @@ class ObjectAnnotationController(Controller):
 
     def render(self):
         self.render_prompt()
-        # pass
 
-        cc1, cc2, cc3, cc4, cc5 = st.columns([1, 2, 2, 1, 1])
+        cc1, cc2, cc3, cc4, cc5 = st.columns([1, 2, 2, 2, 1])
         with cc1:
             st.selectbox(
                 label="Choose Detection Model",
@@ -762,30 +824,70 @@ class ObjectAnnotationController(Controller):
                 key=SLIDER_TXT_TH_KEY,
             )
         with cc4:
-            with elements("segment_button"):
-                mui.Button(
-                    children="Segment",
-                    variant="contained",
-                    startIcon=mui.icon.ContentCut(),
-                    onClick=self.segment_annotation,
-                    size="large",
-                    sx={
-                        "bgcolor": "grey.800",
-                        "borderRadius": "0.5rem",
-                        "width": "117.14px",
-                    },
-                )
+            with stylable_container(
+                key="object_segment_button",
+                css_styles="""{
+                        display: block;
+                        position: absolute;
+                        width: 133px !important;
+                        right: 0px;
+                        
+                        & div {
+                            width: 133px !important;
+                            height: auto; 
+                        }
+                        
+                        & iframe {
+                            width: 133px !important;
+                            height: 57px;
+                        }                    
+                    }
+                    """,
+            ):
+                with elements("segment_button"):
+                    mui.Button(
+                        children="Segment",
+                        variant="contained",
+                        startIcon=mui.icon.ContentCut(),
+                        onClick=self.segment_annotation,
+                        size="large",
+                        sx={
+                            "bgcolor": "grey.800",
+                            "borderRadius": "0.5rem",
+                            "width": "117.14px",
+                        },
+                    )
         with cc5:
-            with elements("save_button"):
-                mui.Button(
-                    children="Save",
-                    variant="contained",
-                    startIcon=mui.icon.Download(),
-                    onClick=self.save_annotation,
-                    size="large",
-                    sx={
-                        "bgcolor": "grey.800",
-                        "borderRadius": "0.5rem",
-                        "width": "117.14px",
-                    },
-                )
+            with stylable_container(
+                key="object_annotate_save_button",
+                css_styles="""{
+                        display: block;
+                        position: absolute;
+                        width: 133px !important;
+                        right: 0px;
+                        
+                        & div {
+                            width: 133px !important;
+                            height: auto; 
+                        }
+                        
+                        & iframe {
+                            width: 133px !important;
+                            height: 57px;
+                        }                    
+                    }
+                    """,
+            ):
+                with elements("save_button"):
+                    mui.Button(
+                        children="Save",
+                        variant="contained",
+                        startIcon=mui.icon.Download(),
+                        onClick=self.save_annotation,
+                        size="large",
+                        sx={
+                            "bgcolor": "grey.800",
+                            "borderRadius": "0.5rem",
+                            "width": "117.14px",
+                        },
+                    )

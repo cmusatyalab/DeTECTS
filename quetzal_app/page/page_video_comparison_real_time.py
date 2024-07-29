@@ -45,6 +45,7 @@ PLAYBACK_TIME_TXT = "Playback Time: {}/{}"
 controller_dict: dict[str, Controller] = {
     PlaybackController.name: PlaybackController,
     ObjectDetectController.name: ObjectDetectController,
+    
 }
 
 logging.basicConfig()
