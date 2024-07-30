@@ -535,6 +535,8 @@ class ObjectAnnotationController(Controller):
 
         self.mask_query = None
         self.mask_db = None
+
+        self.label_list = []
         
         self.is_query = lambda x : x["label_names"][-1:] == 'q' 
         self.is_db = lambda x : x["label_names"][-2:] == 'db'
@@ -588,16 +590,23 @@ class ObjectAnnotationController(Controller):
             isQuery=False,
             idx=idx
         )
-        # print("Index: " , idx)
-        # print(self.detections_query)
+
+        label_to_query = lambda s : s + "_q"
+        label_to_db = lambda s : s +"_db"
+        labels_query = list(map(label_to_query, self.labels_query))
+        labels_db = list(map(label_to_db, self.labels_database))
+        self.label_list = list(set(list(labels_query) + list(labels_db)))
+
+        print("In detection: ", self.label_list)
 
         self.page_state.annotated_frame = {
             "query": QUERY_ANNOTATE_IMG,
             "db": DB_ANNOTATE_IMG,
             "bboxes_query": self.detections_query,
-            "labels_query": self.labels_query,
+            "labels_query": labels_query,
             "bboxes_db": self.detections_database,
-            "labels_db": self.labels_database,
+            "labels_db": labels_db,
+            "label_list": self.label_list,
             "mask_query": [],
             "mask_db" : [],
             "idx": idx,
@@ -651,6 +660,7 @@ class ObjectAnnotationController(Controller):
                 isQuery=False,
             )
 
+
             self.page_state.annotated_frame = {
                 "query": QUERY_ANNOTATE_IMG,
                 "db": DB_ANNOTATE_IMG,
@@ -658,6 +668,7 @@ class ObjectAnnotationController(Controller):
                 "labels_query": self.page_state.annotated_frame['labels_query'],
                 "bboxes_db": xyxy_db,
                 "labels_db": self.page_state.annotated_frame['labels_db'],
+                "label_list": self.page_state.annotated_frame['label_list'],
                 "mask_query": self.mask_query,
                 "mask_db" : self.mask_db,
                 "idx": self.page_state[PlaybackController.name][SLIDER_KEY],
@@ -672,7 +683,11 @@ class ObjectAnnotationController(Controller):
         match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
         query_idx: QueryIdx = match[0]
         db_idx: DatabaseIdx = match[1]
-        query_img_orig = self.page_state.query_frames[query_idx]
+        if self.page_state.warp:
+            query_img_orig = self.page_state.warp_query_frames[query_idx]
+        else:
+            query_img_orig = self.page_state.query_frames[query_idx]
+
         database_img_aligned = self.page_state.db_frames[db_idx]
 
         query = list(filter(self.is_query, st.session_state.result))
