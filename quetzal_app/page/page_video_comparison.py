@@ -49,6 +49,8 @@ LINE_WIDTH_ANNOTATE_DISPLAY = 2
 WIDTH_SEGMENT_DEFAULT = 512
 HEIGHT_SEGMENT_DEFAULT = 288
 
+DEFAULT_LABEL_LIST = ["deer", "human", "dog", "penguin", "flamingo", "teddy bear"]
+
 controller_dict: dict[str, Controller] = {
     PlaybackController.name: PlaybackController,
     ObjectDetectController.name: ObjectDetectController,
@@ -253,7 +255,7 @@ class FrameDisplay:
         if "edit_db" not in st.session_state:
             st.session_state.edit_db = False
         if "label_list" not in st.session_state:
-            st.session_state.label_list = []
+            st.session_state.label_list = DEFAULT_LABEL_LIST
 
     def display_frame(self, labels, images, frame_lens, idxs, fps, 
                       bboxes_query=[], labels_query=[], bboxes_db=[], labels_db=[], 
@@ -329,7 +331,7 @@ class FrameDisplay:
 
         if label_list == []:
             print("No objects detection, loading default labels...")
-            label_list = ["deer", "human", "dog", "penguin", "flamingo", "teddy bear"]
+            label_list = DEFAULT_LABEL_LIST
 
         c1, c2 = st.columns(2)
         
@@ -390,8 +392,11 @@ class FrameDisplay:
                 st.session_state.result = st.session_state.result_db_out["bbox"]
             else:
                 st.session_state.result = st.session_state.result_query_out["bbox"]
-                
-            st.rerun(scope="fragment")
+            try:
+                st.rerun(scope="fragment")
+            except st.errors.StreamlitAPIException:
+                st.session_state.label_list = DEFAULT_LABEL_LIST
+                st.rerun()
         
         st.session_state.new_detection = False
 
@@ -411,11 +416,10 @@ class FrameDisplay:
 
         label_list = st.session_state.label_list
         
-        print(st.session_state.label_list)
         if label_list == []:
             print("Err: Did not run detection or no bounding boxes detected.")
 
-            label_list = ["object_query", "object_db"]
+            label_list = DEFAULT_LABEL_LIST
 
         if "seg_result" not in st.session_state:
             st.session_state.seg_result = []
@@ -427,7 +431,6 @@ class FrameDisplay:
             st.session_state.seg_db_out = {"key": 0, "mask": []}
             
         masks = np.concatenate((mask_query, mask_db), axis=0).tolist()
-        print(label_list)
         if st.session_state.new_segment:
             label_names = [item['label_names'] for item in st.session_state.result] if st.session_state.result else []
             meta_data = [item['meta_data'] for item in st.session_state.result] if st.session_state.result else []
@@ -500,7 +503,11 @@ class FrameDisplay:
             print("Refreshing in segmentation")
             print(len(st.session_state.seg_query_out["mask"]))
 
-            st.rerun(scope="fragment")
+            try:
+                st.rerun(scope="fragment")
+            except st.errors.StreamlitAPIException:
+                st.session_state.label_list = DEFAULT_LABEL_LIST
+                st.rerun()
         
         st.session_state.new_segment = False
 
@@ -530,9 +537,9 @@ class FrameDisplay:
                 database_img = self.page_state.db_frames[db_idx] if self.page_state.warp else self.page_state.db_frames[db_idx]
                 labels_query = self.page_state.annotated_frame["labels_query"]
                 labels_db = self.page_state.annotated_frame["labels_db"]
-                st.session_state.label_list = self.page_state.annotated_frame["label_list"]
 
                 if(st.session_state.new_detection):
+                    st.session_state.label_list = self.page_state.annotated_frame["label_list"]
                     bboxes_query = self.page_state.annotated_frame["bboxes_query"]
                     bboxes_db = self.page_state.annotated_frame["bboxes_db"]
                     st.session_state.is_segment = False

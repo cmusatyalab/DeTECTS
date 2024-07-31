@@ -172,8 +172,6 @@ class GroundingSAMEngine(ObjectDetectionEngine):
 
         height, width, _ = image.shape
 
-        start = time.time()
-
         detections = self.grounding_dino_model.predict_with_caption(
             image=image,
             caption=caption,
@@ -181,14 +179,10 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             text_threshold=text_threshold,
         )
         
-        end = time.time()
-        # print(end - start)
-        
         labels = detections[1]
         detections = detections[0]
 
-        
-
+        # object detection call, which prints segmented masks onto image
         if show_background:
             detections.mask = self._segment(
             sam_predictor=self.sam_predictor,
@@ -202,6 +196,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             annotated_image = self.box_annotator.annotate(
                 scene=annotated_image, detections=detections, labels=labels
             )
+        # for object annotation, which only generates bounding boxes
         else:
             annotated_image = image.copy()
 
@@ -212,7 +207,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         return annotated_image, xyxy_relative, labels
     def generate_segmented_images(self, query_image: str, save_file_path: str, xyxy: np.ndarray):
         """
-        Generates segmented image given bounding boxes
+        Generates segmented image and masks given bounding boxes
 
         Args:
             query_image (str): Path to the input image.
@@ -229,32 +224,23 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         height, width, _ = image.shape
 
         if (len(xyxy) > 0):
-
             mask = self._segment(
                 sam_predictor=self.sam_predictor,
                 image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
                 xyxy=np.array([relative_to_absolute(v, width, height) for v in xyxy])
             )
-
-            scaled_mask = []
-            # scale image for efficient storage in page state 
-            # for m in mask:
-            #     scaled_mask.append(skimage.transform.resize(m, (512, 512), order=0, preserve_range=True, anti_aliasing=False))
-            # mask = np.array(scaled_mask)
-            
-            # mask = np.logical_or.reduce(mask).astype(int)
-  
-            # mask_image = (mask * 255).astype(np.uint8)
+            masked_image = np.logical_or.reduce(mask).astype(int)
+            masked_image = (masked_image * 255).astype(np.uint8)
         else:
             mask = np.zeros((height, width))
-            # mask_image = (mask * 255).astype(np.uint8)
+            masked_image = (mask * 255).astype(np.uint8)
             
-        # cv2.imwrite(save_file_path, mask_image)
-        # color_mask = np.zeros_like(image)
-        # color_mask[mask > 0.5] = [255, 255, 255] # Choose any color you like
-        # masked_image = cv2.addWeighted(image, 0.4, color_mask, 0.6, 0)
-        # cv2.imwrite(save_file_path, cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR))
-        return image, mask
+        color_mask = np.zeros_like(image)
+        color_mask[masked_image > 0.5] = [255, 255, 255] # Choose any color you like
+        masked_image = cv2.addWeighted(image, 0.4, color_mask, 0.6, 0)
+        cv2.imwrite(save_file_path, cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR))
+
+        return masked_image, mask
     
     def save_segmented_masks(self, query_mask: str, db_mask: str, save_file_path: str):
         """
@@ -275,7 +261,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         # combine two masks and save as gray scale image
         combine_mask = np.logical_or(query_mask, db_mask).astype(np.uint8)
         mask_image = (combine_mask * 255).astype(np.uint8)
-        # cv2.imwrite(save_file_path, mask_image)
+        cv2.imwrite(save_file_path, mask_image)
 
         return mask_image
 

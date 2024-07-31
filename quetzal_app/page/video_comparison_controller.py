@@ -11,9 +11,6 @@ from streamlit_extras.stylable_container import stylable_container
 from streamlit_tags import st_tags
 import json
 import base64
-from dotenv import load_dotenv
-
-from openai import OpenAI
 
 from quetzal.align_frames import DatabaseIdx, Match, QueryIdx
 from quetzal.engines.detection_engine.grounding_sam_engine import GroundingSAMEngine
@@ -52,10 +49,6 @@ detector_list = [GroundingSAMEngine]
 detector_dict: dict[DetectorName, ObjectDetectionEngine] = {
     model.name: model for model in detector_list
 }
-
-## Open_AI API setup
-load_dotenv("/home/ubuntu/private/quetzal_dev/quetzal/quetzal_app/page/.env")
-client = OpenAI()
 
 @st.cache_resource
 def getDetectionEngine(detector: DetectorName, torch):
@@ -558,7 +551,6 @@ class ObjectAnnotationController(Controller):
             )
 
     def run_detection(self):
-        print("Running detection...")
         match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
         query_idx: QueryIdx = match[0]
         db_idx: DatabaseIdx = match[1]
@@ -627,7 +619,6 @@ class ObjectAnnotationController(Controller):
             )
 
     def segment_annotation(self):
-            print("Running Segmentation...")
             match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
             query_idx: QueryIdx = match[0]
             db_idx: DatabaseIdx = match[1]
@@ -659,7 +650,6 @@ class ObjectAnnotationController(Controller):
                 xyxy=xyxy_db,
                 isQuery=False,
             )
-
 
             self.page_state.annotated_frame = {
                 "query": QUERY_ANNOTATE_IMG,
@@ -696,27 +686,29 @@ class ObjectAnnotationController(Controller):
         xyxy_query = [{"bbox": item['bboxes'], "label": item['label_names']}  for item in query]
         xyxy_db = [{"bbox": item['bboxes'], "label": item['label_names']} for item in db]
 
-        # self._segment_annotation(
-        #         input_img=query_img_orig,
-        #         output_file=QUERY_ANNOTATE_IMG,
-        #         xyxy=xyxy_query,
-        #         isQuery=True,
-        #     )
+        self._segment_annotation(
+                input_img=query_img_orig,
+                output_file=QUERY_ANNOTATE_IMG,
+                xyxy=xyxy_query,
+                isQuery=True,
+            )
 
-        # self._segment_annotation(
-        #     input_img=database_img_aligned,
-        #     output_file=DB_ANNOTATE_IMG, 
-        #     xyxy=xyxy_db,
-        #     isQuery=False,
-        # )
-        # mask_query = list(filter(self.is_query, st.session_state.seg_result))
-        # mask_db = list(filter(self.is_db, st.session_state.seg_result))
+        self._segment_annotation(
+            input_img=database_img_aligned,
+            output_file=DB_ANNOTATE_IMG, 
+            xyxy=xyxy_db,
+            isQuery=False,
+        )
+
+        mask_query = list(filter(self.is_query, st.session_state.seg_result))
+        mask_db = list(filter(self.is_db, st.session_state.seg_result))
         
-        # mask_query = [item['masks'] for item in mask_query]
-        # mask_db = [item['masks'] for item in mask_db]
+        mask_query = [item['masks'] for item in mask_query]
+        mask_db = [item['masks'] for item in mask_db]
         
-        # mask_image = detector.save_segmented_masks(self.mask_query, self.mask_db, "")
-        # Function to encode an image
+        mask_image = detector.save_segmented_masks(self.mask_query, self.mask_db, "")
+
+        # Function to encode an image to base64
         def encode_image(image_path):
             with open(image_path, "rb") as image_file:  
                 return base64.b64encode(image_file.read()).decode('utf-8')  
@@ -724,18 +716,33 @@ class ObjectAnnotationController(Controller):
         base64_query = encode_image(query_img_orig)
         base64_db = encode_image(database_img_aligned)
 
+        ''' 
+        json save format:
+        "image_query": original query image (base64)
+        "image_db": original database image (base64)
+        "bboxes_query": bounding box annotations for query image
+        "bboxes_db": bounding box annotations for database image
+        "mask_query": 2D list with query masks
+        "mask_db": 2D list with database masks
+        "annotated_query": query image with masks and bounding boxes printed onto the image 
+        "annotated_db": database image with masks and bounding boxes printed onto the image
+        "mask_combined": 2D array with both query and database masks combined
+        '''
+
+        # NOTE: some fields are commented out for LLM query testing purposes
+        # See GPT.ipynb for information
         save_json = {
-                    #  "mask_combined": mask_image.tolist(),
-                    #  "annotated_query": self.annotated_image_query.tolist(),
-                    #  "annotated_db": self.annotated_image_db.tolist(),
-                    #  "mask_query": self.mask_query.tolist(),
-                    #  "mask_db": self.mask_db.tolist(),
-                    #  "caption": caption, 
-                    "image_query": base64_query,
-                    "image_db": base64_db,
-                    "bboxes_query": xyxy_query, 
-                    "bboxes_db": xyxy_db}
-        # detector.save_segmented_masks(mask_query, mask_db, QUERY_ANNOTATE_IMG)
+                        "image_query": base64_query,
+                        "image_db": base64_db,
+                        "bboxes_query": xyxy_query, 
+                        "bboxes_db": xyxy_db,
+                        # "mask_query": self.mask_query.tolist(),
+                        # "mask_db": self.mask_db.tolist(),
+                        # "annotated_query": self.annotated_image_query.tolist(),
+                        # "annotated_db": self.annotated_image_db.tolist(),
+                        # "mask_combined": mask_image.tolist(),
+                    }
+        
         # save format: {video_title}_{query_frame_idx}_{db_frame_idx}
         with open(f"{ANNOTATE_SAVE_PATH}/quetzal_annotated_{query_idx}_{db_idx}.json", "w") as outfile:
             json.dump(save_json, outfile)

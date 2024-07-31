@@ -260,8 +260,11 @@ pip_install streamlit==1.37.0
 pip_install streamlit-extras
 pip_install streamlit-elements==0.1.*
 pip_install streamlit-tags
-pip_install streamlit-image-annotation
+pip_install streamlit-label-kit
 pip_install stqdm
+
+# patch compatibility issues for streamlit-elements
+python streamlit_elements_patch.py
 
 echo_info "----- Installing streamlit-float packages -----"
 cd quetzal_app/external/streamlit-float
@@ -282,7 +285,6 @@ echo_info "----- Installing Segment-Anything -----"
 pip install git+https://github.com/facebookresearch/segment-anything.git
 
 conda_raw_install -c conda-forge jupyter
-
 
 pip_install supervision==0.6.0
 
