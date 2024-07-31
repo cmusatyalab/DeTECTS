@@ -218,7 +218,6 @@ class AnafiGPS(AbstractGPS):
         """
         video_path  = self.video._abs_path
         frames_dir = self.video.dataset_dir
-        print(frames_dir)
 
         # Step 1: Extract exiftool output
         command = ["exiftool", "-ee", "-GPSLatitude", "-GPSLongitude", "-DroneQuaternion", "-Elevation", video_path]

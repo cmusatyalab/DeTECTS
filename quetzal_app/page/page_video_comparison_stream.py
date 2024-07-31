@@ -623,65 +623,6 @@ class FrameDisplay:
     def __init__(self, page_state):
         self.page_state = page_state
 
-    # def display_frame(self, label, images, frame_len, idx, fps):
-    #     total_time, show_hours = format_time(
-    #         frame_len / fps, show_hours=False, final_time=True
-    #     )
-    #     curr_time, _ = format_time(idx / fps, show_hours)
-
-    #     image_frame(
-    #         image_urls=images,
-    #         captions=[
-    #             FRAME_IDX_TXT.format(idx, frame_len),
-    #             PLAYBACK_TIME_TXT.format(curr_time, total_time),
-    #         ],
-    #         label=label,
-    #         starting_point=0,
-    #         dark_mode=False,
-    #         key="image_comparison" + str(fps),
-    #     )
-
-    # def render(self):
-    #     match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
-    #     query_idx: QueryIdx = match[0]
-    #     db_idx: DatabaseIdx = match[1]
-    #     query: QueryVideo = self.page_state.query
-    #     database: DatabaseVideo = self.page_state.database
-
-    #     match self.page_state.controller:
-    #         case PlaybackController.name if self.page_state.warp:
-    #             query_img = self.page_state.warp_query_frames[query_idx]
-    #             database_img = self.page_state.db_frames[db_idx]
-    #         case ObjectDetectController.name if self.page_state.annotated_frame[
-    #             "idx"
-    #         ] == ss.slider:
-    #             query_img = self.page_state.annotated_frame["query"]
-    #             database_img = self.page_state.annotated_frame["db"]
-    #         case _:
-    #             query_img = self.page_state.query_frames[query_idx]
-    #             database_img = self.page_state.db_frames[db_idx]
-
-    #     query_img_base64 = f"data:image/jpeg;base64,{get_base64(query_img)}"
-    #     db_img_base64 = f"data:image/jpeg;base64,{get_base64(database_img)}"
-
-    #     imgc1, imgc2 = st.columns([1, 1], gap="small")
-    #     with imgc1:
-    #         self.display_frame(
-    #             label="Query Frame: " + query.name,
-    #             images=[query_img_base64],
-    #             frame_len=len(self.page_state.query_frames),
-    #             idx=query_idx,
-    #             fps=QueryVideo.FPS,
-    #         )
-
-    #     with imgc2:
-    #         self.display_frame(
-    #             label="Aligned Database Frame: " + database.name,
-    #             images=[query_img_base64, db_img_base64],
-    #             frame_len=len(self.page_state.db_frames),
-    #             idx=db_idx,
-    #             fps=DatabaseVideo.FPS,
-    #         )
     def display_frame(self, labels, images, frame_lens, idxs, fps):
             total_times, curr_times = [], []
             for i in range(len(frame_lens)):

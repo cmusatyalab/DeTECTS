@@ -298,7 +298,7 @@ pip install staticmap
 pip install redis
 
 conda install -y -c pytorch faiss-gpu==1.7.4
-pip_install faiss-cpu==1.9.0
+conda install -y -c pytorch::faiss-cpu==1.7.4
 # # conda_raw_install -c pytorch faiss-gpu==1.7.2
 # Core packages using pip_install
 if [ $dev_tools == "true" ]; then 
