@@ -160,27 +160,27 @@ page_dict: dict[str, Page] = {page.name: page for page in page_list}
 if "page_states" not in ss:
     app_state = AppState()
 
-    # for development
-    with open('query.pkl', 'rb') as f:
-        q = pickle.load(f)
-        query_video = QueryVideo.from_quetzal_file(QuetzalFile(path=q, root_dir=dataset_root, metadata_dir=meta_data_root, user=user))
-        f.close()
-    with open('db.pkl', 'rb') as f:
-        db = pickle.load(f)
-        database_video = DatabaseVideo.from_quetzal_file(QuetzalFile(path=db, root_dir=dataset_root, metadata_dir=meta_data_root, user=user))
-        f.close()
-    with open('matches.pkl', 'rb') as f:
-        matches = pickle.load(f)
-        f.close()
-    with open('warp_query_frame_list.pkl', 'rb') as f:
-        warp_query_frame_list = pickle.load(f)
-        f.close()
-    with open('query_frame_list.pkl', 'rb') as f:
-        query_frame_list = pickle.load(f)
-        f.close()
-    with open('db_frame_list.pkl', 'rb') as f:
-        db_frame_list = pickle.load(f)
-        f.close()
+    # # for development
+    # with open('query.pkl', 'rb') as f:
+    #     q = pickle.load(f)
+    #     query_video = QueryVideo.from_quetzal_file(QuetzalFile(path=q, root_dir=dataset_root, metadata_dir=meta_data_root, user=user))
+    #     f.close()
+    # with open('db.pkl', 'rb') as f:
+    #     db = pickle.load(f)
+    #     database_video = DatabaseVideo.from_quetzal_file(QuetzalFile(path=db, root_dir=dataset_root, metadata_dir=meta_data_root, user=user))
+    #     f.close()
+    # with open('matches.pkl', 'rb') as f:
+    #     matches = pickle.load(f)
+    #     f.close()
+    # with open('warp_query_frame_list.pkl', 'rb') as f:
+    #     warp_query_frame_list = pickle.load(f)
+    #     f.close()
+    # with open('query_frame_list.pkl', 'rb') as f:
+    #     query_frame_list = pickle.load(f)
+    #     f.close()
+    # with open('db_frame_list.pkl', 'rb') as f:
+    #     db_frame_list = pickle.load(f)
+    #     f.close()
     
     root_state = PageState(
         root_dir=dataset_root,
@@ -192,18 +192,18 @@ if "page_states" not in ss:
         comparison_matches=None,
     )
 
-    root_state["comparison_matches"] = {
-        "query": query_video,
-        "database": database_video,
-        "matches": matches,
-        "query_frames": query_frame_list,
-        "db_frames": db_frame_list,
-        "warp_query_frames": warp_query_frame_list,
-    }
+    # root_state["comparison_matches"] = {
+    #     "query": query_video,
+    #     "database": database_video,
+    #     "matches": matches,
+    #     "query_frames": query_frame_list,
+    #     "db_frames": db_frame_list,
+    #     "warp_query_frames": warp_query_frame_list,
+    # }
 
-    # root_state.page = FileExplorerPage.name
+    root_state.page = FileExplorerPage.name
     # root_state.page = VideoComparisonStreamPage.name
-    root_state.page = VideoComparisonPage.name
+    # root_state.page = VideoComparisonPage.name
 
 
     def build_to_page(page: Page):

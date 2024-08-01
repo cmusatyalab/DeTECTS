@@ -21,6 +21,7 @@ data.tar
 
 # annotations
 **/annotations/
+*.pkl
 
 # secrets
 .env
