@@ -195,15 +195,15 @@ To delve into zero-shot object detection on the current frame, click on the "obj
 To annotate images, click on the "object-annotation" tab. Here, users can use zero-shot object detection to generate editable bounding boxes. After editing the bounding boxes, users can also segment the image. Saving the annotation creates a .json file with the following format:
 ```json
 {
-        "image_query": original query image (base64)
-        "image_db": original database image (base64)
-        "bboxes_query": bounding box annotations for query image
-        "bboxes_db": bounding box annotations for database image
-        "mask_query": 2D list with query masks
-        "mask_db": 2D list with database masks
-        "annotated_query": query image with masks and bounding boxes printed onto the image 
-        "annotated_db": database image with masks and bounding boxes printed onto the image
-        "mask_combined": 2D array with both query and database masks combined
+        "image_query": "original query image (base64)",
+        "image_db": "original database image (base64)",
+        "bboxes_query": "bounding box annotations for query image",
+        "bboxes_db": "bounding box annotations for database image",
+        "mask_query": "2D list with query masks",
+        "mask_db": "2D list with database masks",
+        "annotated_query": "query image with masks and bounding boxes printed onto the image",
+        "annotated_db": "database image with masks and bounding boxes printed onto the image",
+        "mask_combined": "2D array with both query and database masks combined",
 }
 ```
 
