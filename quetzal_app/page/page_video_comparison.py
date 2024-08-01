@@ -5,7 +5,6 @@ from streamlit import session_state as ss
 
 from streamlit_elements import elements, mui
 from streamlit_label_kit import detection, segmentation
-from glob import glob
 from quetzal_app.elements.mui_components import MuiToggleButton
 
 from quetzal.dtos.video import QueryVideo, DatabaseVideo
@@ -20,13 +19,10 @@ from quetzal_app.page.video_comparison_controller import (
     PLAY_IDX_KEY,
 )
 
-import time
 
 import skimage.transform 
 
 from pathlib import Path
-import base64
-import pickle
 import numpy as np
 import uuid
 

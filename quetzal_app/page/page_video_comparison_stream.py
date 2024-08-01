@@ -23,10 +23,9 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 from quetzal.engines.pipeline_executor import Pipeline
 from quetzal.engines.engine import AbstractEngine
 from quetzal.engines.align_engine.realtime_engine import RealtimeAlignmentEngine
-from quetzal.dtos.gps import AnafiGPS, AbstractGPS
+from quetzal.dtos.gps import AnafiGPS
 
 import threading
-import queue
 import os
 import time
 import logging

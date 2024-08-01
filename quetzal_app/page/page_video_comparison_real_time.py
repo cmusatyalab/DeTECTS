@@ -5,7 +5,7 @@ from streamlit import session_state as ss
 from streamlit_elements import elements, mui
 from quetzal_app.elements.mui_components import MuiToggleButton
 
-from quetzal.dtos.video import QueryVideo, DatabaseVideo, Video, convert_path
+from quetzal.dtos.video import QueryVideo, DatabaseVideo, Video
 from quetzal.align_frames import QueryIdx, DatabaseIdx, Match
 from quetzal_app.utils.utils import format_time, get_base64
 from quetzal_app.page.page_state import PageState, Page
@@ -23,10 +23,9 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 from quetzal.engines.pipeline_executor import Pipeline
 from quetzal.engines.engine import AbstractEngine
 from quetzal.engines.align_engine.realtime_engine import RealtimeAlignmentEngine
-from quetzal.dtos.gps import AnafiGPS, AbstractGPS
+from quetzal.dtos.gps import AnafiGPS
 
 import threading
-import queue
 import os
 import time
 import logging

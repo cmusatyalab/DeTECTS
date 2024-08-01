@@ -10,13 +10,10 @@ from segment_anything import sam_model_registry, SamPredictor
 import numpy as np
 from segment_anything import SamPredictor
 
-import skimage.transform
 import cv2
 
 import logging
 from quetzal.engines.engine import ObjectDetectionEngine
-
-import time
 
 logging.basicConfig()
 logger = logging.getLogger("GroundingSAM Engine")

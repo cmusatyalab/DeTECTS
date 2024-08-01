@@ -6,10 +6,8 @@ from streamlit import session_state as ss
 from streamlit_elements import elements, mui
 from streamlit_extras.stylable_container import stylable_container
 from quetzal.engines.align_engine.dtw_engine import DTWEngine
-from quetzal.engines.align_engine.realtime_engine import RealtimeAlignmentEngine
 from quetzal.engines.engine import AlignmentEngine
 import torch
-import pickle, shelve, json
 
 from quetzal_app.elements.mui_components import (
     ELEMENT_BOTTOM_MARGIN,
@@ -31,7 +29,6 @@ from quetzal_app.page.page_state import Page, PageState
 from quetzal_app.utils.utils import get_base64
 from quetzal.dtos.dtos import FileType, QuetzalFile
 from quetzal.dtos.video import DatabaseVideo, QueryVideo
-from quetzal.align_frames import align_frame_pairs, align_video_frames
 from pathlib import Path
 
 logger = logging.getLogger(__file__)
@@ -264,26 +261,8 @@ class FileExplorerPage(Page):
         }
         self.root_state["comparison_matches"] = comparison_matches
         
-        # for development
-        
-        with open('query.pkl', 'wb') as f:                      
-            pickle.dump(str(self.page_state.query._path), f)
-            f.close()
-        with open('db.pkl', 'wb') as f:
-            pickle.dump(str(self.page_state.database._path), f)           
-            f.close()
-        with open('matches.pkl', 'wb') as f:
-            pickle.dump(matches, f)
-            f.close()
-        with open('warp_query_frame_list.pkl', 'wb') as f:
-            pickle.dump(warp_query_frame_list, f)
-            f.close()
-        with open('query_frame_list.pkl', 'wb') as f:
-            pickle.dump(query_frame_list, f)
-            f.close()
-        with open('db_frame_list.pkl', 'wb') as f:
-            pickle.dump(db_frame_list, f)
-            f.close()
+        # for development, serialize/pickle the following: 
+        # query, database, matches, warp_query_frame_list, query_frame_list, db_Frame_list
         
         self.to_page[1]()
         
