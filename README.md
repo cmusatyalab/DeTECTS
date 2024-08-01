@@ -7,19 +7,19 @@ Quetzal offers automated frame alignment for drone footage captured along simila
 
 **File-explorer view**
 
-<img src="./demo/demo_file_explorer.png" height="400" width="700" />
+<img src="./demo/demo_file_explorer.png" height="400" width="650" />
 
 **Video Comparison View**
 
-<img src="./demo/demo_frame_alignment.png" height="400" width="700" />
+<img src="./demo/demo_frame_alignment.png" height="400" width="650" />
 
 **Object Detection View**
 
-<img src="./demo/demo_object_detection.png" height="400" width="700"/>
+<img src="./demo/demo_object_detection.png" height="400" width="650"/>
 
 **Object Annotation View**
 
-<img src="./demo/demo_object_annotation.png" height="400" width="700">
+<img src="./demo/demo_object_annotation.png" height="400" width="650">
 
 
 **Future Plans:** Support change detection between two drone footages.
