@@ -18,6 +18,7 @@ Quetzal offers automated frame alignment for drone footage captured along simila
 <img src="./demo/demo_object_detection.png" height="400" width="700"/>
 
 **Object Annotation View**
+
 <img src="./demo/demo_object_annotation.png" height="400" width="700">
 
 
