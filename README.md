@@ -2,21 +2,24 @@
 
 Quetzal provides automatic frame alignment between two drone footages taken along similar routes.
 
-Quetzal offers automated frame alignment for drone footage captured along similar routes. The Quetzal app features a file-system GUI designed for organizing and sharing various projects and videos, enabling users to compare two videos from the database. Additionally, it incorporates zero-shot object detection ([GroundingSAM](https://github.com/IDEA-Research/Grounded-Segment-Anything)), allowing users to search for objects within video frames based on text prompts provided.
+Quetzal offers automated frame alignment for drone footage captured along similar routes. The Quetzal app features a file-system GUI designed for organizing and sharing various projects and videos, enabling users to compare two videos from the database. Additionally, it incorporates zero-shot object detection ([GroundingSAM](https://github.com/IDEA-Research/Grounded-Segment-Anything)), allowing users to search for objects within video frames based on text prompts provided and annotate frames with interesting observations or changes.
 
 
 **File-explorer view**
 
-<img src="./demo/demo_file_explorer.png" height="400" />
+<img src="./demo/demo_file_explorer.png" height="400" width="650" />
 
 **Video Comparison View**
 
-<img src="./demo/demo_frame_alignment.png" height="400" />
+<img src="./demo/demo_frame_alignment.png" height="400" width="650" />
 
 **Object Detection View**
 
-<img src="./demo/demo_object_detection.png" height="400" />
+<img src="./demo/demo_object_detection.png" height="400" width="650"/>
 
+**Object Annotation View**
+
+<img src="./demo/demo_object_annotation.png" height="400" width="650">
 
 
 **Future Plans:** Support change detection between two drone footages.
@@ -77,12 +80,7 @@ run ./mkdocs.sh on root dir
 To run the Quetzal app on a GPU server, use the following command:
 
 ```bash
-python3 -m quetzal_app -l "127.0.0.1" -p PORT_NUM --dataset-root /data/root --metadata-root /meta_data/root --cuda --cuda-device 0 -u USER_NAME
-```
-
-RUN THIS IN quetzal_dev directory
-```bash
-python3 -m quetzal_app -p 7861 --dataset ../data_test/home/root --metadata-root ../data_test/meta_data/root --cuda -u example
+python3 -m quetzal_app -l "127.0.0.1" -p PORT_NUM --dataset-root ./data/root --metadata-root ./meta_data/root --cuda --cuda-device 0 -u USER_NAME
 ```
 
 ### CPU Only:
@@ -90,7 +88,7 @@ python3 -m quetzal_app -p 7861 --dataset ../data_test/home/root --metadata-root 
 For systems without a GPU, execute the following command:
 
 ```bash
-python3 -m quetzal_app -l "127.0.0.1" -p PORT_NUM --dataset-root /data/root --metadata-root /meta_data/root -u USER_NAME
+python3 -m quetzal_app -l "127.0.0.1" -p PORT_NUM --dataset-root ./data/root --metadata-root ./meta_data/root -u USER_NAME
 ```
 
 The default user is "default_user".
@@ -99,24 +97,24 @@ The default user is "default_user".
 Quetzal provides a CLI for setting up the dataset directory. You can use the following commands to initialize the directory, add a user, or import/convert an existing directory to create a Quetzal-compatible meta-dataset directory.
 
 ### Initialize Dataset and Meta-dataset Directories
-To initialize the dataset folder at "/data/root" and meta-dataset at "/meta_data/root":
+To initialize the dataset folder at "./data/root" and meta-dataset at "./meta_data/root":
 
 ```bash
-python3 -m quetzal init -d /data/root -m /meta_data/root
+python3 -m quetzal init -d ./data/root -m ./meta_data/root
 ```
 
 ### Add a User Directory for the Dataset
-To add a user directory for the dataset at "/data/root":
+To add a user directory for the dataset at "./data/root":
 
 ```bash
-python3 -m quetzal user -d /data/root -m /meta_data/root -u USER_NAME
+python3 -m quetzal user -d ./data/root -m ./meta_data/root -u USER_NAME
 ```
 
 ### Import Dataset and Create Meta-dataset
-To import a dataset from "/data/root" and create a meta-dataset at "/meta_data/root":
+To import a dataset from "./data/root" and create a meta-dataset at "./meta_data/root":
 
 ```bash
-python3 -m quetzal import -d /data/root -m /meta_data/root
+python3 -m quetzal import -d ./data/root -m ./meta_data/root
 ```
 
 The default root dataset directory is "./data/home/root," and the default meta-dataset directory is "./data/meta_data/root."
@@ -188,11 +186,26 @@ The File-system GUI of Quetzal mirrors the user-friendly design found in many po
 
 To enter a directory you've previously selected, simply click on it again. To navigate back or to a different parent directory, use the breadcrumb navigation at the top.
 
-For video files, the information section includes an "Analyze" option. This feature allows you to register the video for comparison. Once analyzed, you have the choice to mark the video as a "Use as Query" or "Use as Database" for comparison purposes. After selecting one video for each category, proceed by clicking "RUN COMPARISON" on the left side of the screen to move to the comparison page
+For video files, the information section includes an "Analyze" option. This feature allows you to register the video for comparison. Once analyzed, you have the choice to mark the video as a "Use as Query" or "Use as Database" for comparison purposes. After selecting one video for each category, proceed by clicking "RUN COMPARISON" on the left side of the screen to move to the comparison page. To run the real-time matching algorithm, fill out the information to your redis server in `./quetzal_app/page/page_video_comparison_stream.py` (line 485), select your query and database videos, and click "STREAM MATCHING".
 
 The comparison page showcases the frame from the query video on the left and the aligned frame from the database video on the right, arranged side by side. Additionally, for the image on the right, a slider is provided, enabling you to overlay and compare the two frames directly.
 
-To delve into zero-shot object detection on the current frame, click on the "object-detection" tab.
+To delve into zero-shot object detection on the current frame, click on the "object-detection" tab. 
+
+To annotate images, click on the "object-annotation" tab. Here, users can use zero-shot object detection to generate editable bounding boxes. After editing the bounding boxes, users can also segment the image. Saving the annotation creates a .json file with the following format:
+```json
+{
+        "image_query": "original query image (base64)",
+        "image_db": "original database image (base64)",
+        "bboxes_query": "bounding box annotations for query image",
+        "bboxes_db": "bounding box annotations for database image",
+        "mask_query": "2D list with query masks",
+        "mask_db": "2D list with database masks",
+        "annotated_query": "query image with masks and bounding boxes printed onto the image",
+        "annotated_db": "database image with masks and bounding boxes printed onto the image",
+        "mask_combined": "2D array with both query and database masks combined",
+}
+```
 
 ## Developing Extensions
 To ensure backend algorithms are compatible with Quetzal_app, modifications to files/directories should utilize `quetzal.dtos.dtos.QuetzalFile` and `quetzal.dtos.video.Video` objects. For guidance on generating cached/meta data associated with specific files, please refer to the modules `quetzal.engines.vpr_engine.anyloc_engine` and `quetzal.engines.image_registration_engine.loftr_engine`. These references will provide insights into how and where to manage cached/meta data effectively.
