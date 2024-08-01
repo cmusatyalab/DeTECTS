@@ -2,6 +2,7 @@
 
 compare_aligned_idx_copy.py
 *.ipynb
+*.pkl
 quetzal/external/RANSAC_flow/model/pretrained/
 # src/external/RANSAC_flow/model/pretrained/
 weights/
@@ -21,7 +22,6 @@ data.tar
 
 # annotations
 **/annotations/
-*.pkl
 
 # secrets
 .env
