@@ -175,6 +175,10 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             box_threshold=box_threshold,
             text_threshold=text_threshold,
         )
+        
+        end = time.time()
+        print(end - start)
+        
         labels = detections[1]
         detections = detections[0]
 
