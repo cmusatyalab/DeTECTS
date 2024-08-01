@@ -1,6 +1,8 @@
 **/__pycache__/
+
 compare_aligned_idx_copy.py
 *.ipynb
+*.pkl
 quetzal/external/RANSAC_flow/model/pretrained/
 # src/external/RANSAC_flow/model/pretrained/
 weights/
@@ -13,3 +15,13 @@ gradio_UX.py
 **/*.egg-info/
 **/build/
 **/dist/
+
+# dataset
+**/data/
+data.tar
+
+# annotations
+**/annotations/
+
+# secrets
+.env

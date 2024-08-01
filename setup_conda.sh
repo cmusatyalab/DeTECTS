@@ -4,7 +4,7 @@
 readonly ARGS="$@"  # Reset using https://stackoverflow.com/a/4827707
 readonly PROGNAME=$(basename $0)
 readonly PROGPATH=$(realpath $(dirname $0))
-export CUDA_HOME=/usr/local/cuda
+export CUDA_HOME=/usr/local/cuda-11.7
 
 echo $CUDA_HOME
 
@@ -256,11 +256,16 @@ pip_install torchviz=='0.0.2'
 pip_install onedrivedownloader
 pip_install utm
 pip_install bcrypt
-pip_install streamlit==1.33.0
+pip_install streamlit==1.37.0
+
 pip_install streamlit-extras
 pip_install streamlit-elements==0.1.*
 pip_install streamlit-tags
+pip_install streamlit-label-kit
 pip_install stqdm
+
+# patch compatibility issues for streamlit-elements
+python streamlit_elements_patch.py
 
 echo_info "----- Installing streamlit-float packages -----"
 cd quetzal_app/external/streamlit-float
@@ -282,14 +287,21 @@ pip install git+https://github.com/facebookresearch/segment-anything.git
 
 conda_raw_install -c conda-forge jupyter
 
-
 pip_install supervision==0.6.0
 
 echo_info "----- Installing Quetzal -----"
 pip install -e .
 
+sudo apt install exiftool
+pip install haversine
+pip install Rtree
+pip install staticmap
+pip install redis
+
 conda install -y -c pytorch faiss-gpu==1.7.4
-conda install -7 -c pytorch::faiss-cpu==1.7.4
+
+conda install -y -c pytorch::faiss-cpu==1.7.4
+
 # # conda_raw_install -c pytorch faiss-gpu==1.7.2
 # Core packages using pip_install
 if [ $dev_tools == "true" ]; then 

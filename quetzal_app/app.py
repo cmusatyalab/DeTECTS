@@ -1,4 +1,7 @@
 from quetzal_app.page.page_video_comparison import VideoComparisonPage
+from quetzal_app.page.page_video_comparison_real_time import VideoComparisonRealTimePage
+from quetzal_app.page.page_video_comparison_stream import VideoComparisonStreamPage
+
 from quetzal_app.page.page_file_explorer import FileExplorerPage
 from quetzal_app.page.page_state import AppState, PageState, Page
 
@@ -8,7 +11,6 @@ import argparse
 import torch
 
 from threading import Lock
-from streamlit.web.server.websocket_headers import _get_websocket_headers
 import os
 from pathlib import Path
 
@@ -135,14 +137,22 @@ def parse_args():
 
 
 dataset_root, meta_data_root, cuda_device, torch_device, user = parse_args()
-headers = _get_websocket_headers()
-user = headers.get("X-Forwarded-User", user)
+headers = st.context.headers
+# user = headers.get("X-Forwarded-User", user)
+user = user
 
-page_list: list[Page] = [FileExplorerPage, VideoComparisonPage]
+page_list: list[Page] = [
+    FileExplorerPage,
+    VideoComparisonPage, 
+    VideoComparisonRealTimePage,
+    VideoComparisonStreamPage
+]
+
 page_dict: dict[str, Page] = {page.name: page for page in page_list}
 
 if "page_states" not in ss:
     app_state = AppState()
+  
     root_state = PageState(
         root_dir=dataset_root,
         metadata_dir=meta_data_root,

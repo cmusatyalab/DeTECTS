@@ -4,6 +4,7 @@ import torch
 import subprocess
 from groundingdino.util.inference import Model
 import supervision as sv
+from streamlit_label_kit import absolute_to_relative, relative_to_absolute
 
 from segment_anything import sam_model_registry, SamPredictor
 import numpy as np
@@ -143,6 +144,7 @@ class GroundingSAMEngine(ObjectDetectionEngine):
         save_file_path: str,
         box_threshold: float = BOX_TRESHOLD,
         text_threshold: float = TEXT_TRESHOLD,
+        show_background: bool = True
     ):
         """
         Generates an image with detected objects based on the provided captions masked and annotated. 
@@ -154,13 +156,18 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             save_file_path (str): Path where the annotated image will be saved.
             box_threshold (float, optional): Threshold for object detection bounding boxes. Defaults to BOX_TRESHOLD.
             text_threshold (float, optional): Threshold for textual descriptions. Defaults to TEXT_TRESHOLD.
+            show_background (bool, optional): Show Segmentation and detections on background. Defaults to True for object detection tab
         
         Returns:
             np.ndarray: The annotated image with detected and segmented objects based on captions.
+            np.ndarray: A list of the xyxy positions of objects based on captions.
+            np.ndarray: A list of labels corresponding to the detected objects.
         """
         caption = " . ".join(caption)
 
         image = cv2.imread(query_image)
+
+        height, width, _ = image.shape
 
         detections = self.grounding_dino_model.predict_with_caption(
             image=image,
@@ -168,28 +175,96 @@ class GroundingSAMEngine(ObjectDetectionEngine):
             box_threshold=box_threshold,
             text_threshold=text_threshold,
         )
+        
         labels = detections[1]
         detections = detections[0]
 
-        detections.mask = self._segment(
+        # object detection call, which prints segmented masks onto image
+        if show_background:
+            detections.mask = self._segment(
             sam_predictor=self.sam_predictor,
             image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
             xyxy=detections.xyxy,
-        )
-
-        # annotate image with detections
-        annotated_image = self.mask_annotator.annotate(
-            scene=image.copy(), detections=detections
-        )
-        annotated_image = self.box_annotator.annotate(
-            scene=annotated_image, detections=detections, labels=labels
-        )
+            )
+            # annotate image with detections
+            annotated_image = self.mask_annotator.annotate(
+                scene=image.copy(), detections=detections
+            )
+            annotated_image = self.box_annotator.annotate(
+                scene=annotated_image, detections=detections, labels=labels
+            )
+        # for object annotation, which only generates bounding boxes
+        else:
+            annotated_image = image.copy()
 
         cv2.imwrite(save_file_path, annotated_image)
-        return annotated_image
 
+        xyxy_relative = [absolute_to_relative(bbox, width, height) for bbox in detections.xyxy]
 
+        return annotated_image, xyxy_relative, labels
+    def generate_segmented_images(self, query_image: str, save_file_path: str, xyxy: np.ndarray):
+        """
+        Generates segmented image and masks given bounding boxes
+
+        Args:
+            query_image (str): Path to the input image.
+            save_file_path (str): Path where the annotated image will be saved.
+            xyxy (np.ndarray): Array of bounding boxes in relative format (xyxy)
+            output_width (int): Width of output mask 
+            output_height (int): Height of output mask 
+        
+        Returns:
+            np.ndarray: The annotated image with detected and segmented objects based on captions.
+            np.ndarray: Segment Mask
+        """
+        image = cv2.imread(query_image)
+        height, width, _ = image.shape
+
+        if (len(xyxy) > 0):
+            mask = self._segment(
+                sam_predictor=self.sam_predictor,
+                image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
+                xyxy=np.array([relative_to_absolute(v, width, height) for v in xyxy])
+            )
+            masked_image = np.logical_or.reduce(mask).astype(int)
+            masked_image = (masked_image * 255).astype(np.uint8)
+        else:
+            mask = np.zeros((height, width))
+            masked_image = (mask * 255).astype(np.uint8)
+            
+        color_mask = np.zeros_like(image)
+        color_mask[masked_image > 0.5] = [255, 255, 255] # Choose any color you like
+        masked_image = cv2.addWeighted(image, 0.4, color_mask, 0.6, 0)
+        cv2.imwrite(save_file_path, cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR))
+
+        return masked_image, mask
+    
+    def save_segmented_masks(self, query_mask: str, db_mask: str, save_file_path: str):
+        """
+        Generates a mask image for change detection dataset
+
+        Args:
+            query_mask (nd.array): Segmented query mask.
+            db_mask (nd.array): Segmented database mask.
+            save_file_path (str): Path where the annotated image will be saved.
+        
+        Returns:
+            np.ndarray: Dataset image
+        """
+        # flatten masks to 2D
+        query_mask = np.logical_or.reduce(query_mask).astype(bool)
+        db_mask = np.logical_or.reduce(db_mask).astype(bool)
+        
+        # combine two masks and save as gray scale image
+        combine_mask = np.logical_or(query_mask, db_mask).astype(np.uint8)
+        mask_image = (combine_mask * 255).astype(np.uint8)
+        cv2.imwrite(save_file_path, mask_image)
+
+        return mask_image
+
+    
 if __name__ == "__main__":
+    engine = GroundingSAMEngine()
     engine = GroundingSAMEngine()
 
 
