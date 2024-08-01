@@ -20,6 +20,8 @@ from quetzal_app.page.video_comparison_controller import (
     PLAY_IDX_KEY,
 )
 
+import time
+
 import skimage.transform 
 
 from pathlib import Path
@@ -40,9 +42,12 @@ BORDER_RADIUS = "0.8rem"
 FRAME_IDX_TXT = "Frame Index: {}/{}"
 PLAYBACK_TIME_TXT = "Playback Time: {}/{}"
 
-WIDTH_ANNOTATE_DISPLAY = 512
-HEIGHT_ANNOTATE_DISPLAY = 512
+WIDTH_ANNOTATE_DISPLAY = 1024
+HEIGHT_ANNOTATE_DISPLAY = 576
 LINE_WIDTH_ANNOTATE_DISPLAY = 2
+
+WIDTH_SEGMENT_DEFAULT = 512
+HEIGHT_SEGMENT_DEFAULT = 288
 
 controller_dict: dict[str, Controller] = {
     PlaybackController.name: PlaybackController,
@@ -136,7 +141,9 @@ class VideoComparisonPage(Page):
 
             ControllerOptions(self.page_state, self.root_state.torch_device).render()
             with st.container(border=True):
-                controller[self.page_state.controller].render()
+                controller['playback'].render()
+                if(self.page_state.controller != 'playback'):
+                    controller[self.page_state.controller].render()
 
             ## !! no other render beyond this!! for player-control
 
@@ -235,17 +242,26 @@ class FrameDisplay:
 
     def __init__(self, page_state):
         self.page_state = page_state
+        if "is_segment" not in st.session_state:
+            st.session_state.is_segment = False
+        if "new_segment" not in st.session_state:
+            st.session_state.new_segment = False
+        if "new_detection" not in st.session_state:
+            st.session_state.new_detection = False
+        if "edit_query" not in st.session_state:
+            st.session_state.edit_query = False
+        if "edit_db" not in st.session_state:
+            st.session_state.edit_db = False
 
-    def display_frame(self, labels, images, image_urls, frame_lens, idxs, fps, 
+    def display_frame(self, labels, images, frame_lens, idxs, fps, 
                       bboxes_query=[], labels_query=[], bboxes_db=[], labels_db=[], 
                       mask_query=[], mask_db=[]):
         match self.page_state.controller:
             case ObjectAnnotationController.name:
-                # print(self.page_state.is_segment)
-                if self.page_state.is_segment:
-                    self.display_segmentation_frame(image_urls, mask_query, labels_query, mask_db, labels_db)
+                if st.session_state.is_segment:
+                    self.display_segmentation_frame(mask_query, mask_db)
                 else:
-                    self.display_detection_frame(image_urls, bboxes_query, labels_query, bboxes_db, labels_db)
+                    self.display_detection_frame(bboxes_query, labels_query, bboxes_db, labels_db)
                     
             case _:
                 total_times, curr_times = [], []
@@ -272,138 +288,228 @@ class FrameDisplay:
                     key="image_comparison" + str(fps[0]) + str(fps[1])
                 )
 
-    @st.experimental_fragment
-    def display_detection_frame(self, image_urls, bboxes_query, labels_query, bboxes_db, labels_db):
-        label_to_query = lambda s : s + "_q"
-        label_to_db = lambda s : s +"_db"
-        labels_query = list(map(label_to_query, labels_query))
-        labels_db = list(map(label_to_db, labels_db))
-        label_list = list(set(list(labels_query) + list(labels_db)))
+    # @st.dialog("Edit Annotation")
+    # def detection_popout(self, img, bboxes, bbox_ids, labels, meta_data, label_list, key):
+    #     test_out = detection(
+    #                 image_path=img,
+    #                 bboxes=bboxes,
+    #                 bbox_ids=bbox_ids,
+    #                 bbox_format='REL_XYXY',
+    #                 labels=labels,
+    #                 # info_dict=info_dict,
+    #                 meta_data=meta_data,
+    #                 label_list=label_list,
+    #                 line_width=LINE_WIDTH_ANNOTATE_DISPLAY,
+    #                 class_select_type="radio",
+    #                 ui_position="left",
+    #                 item_editor=True,
+    #                 image_width=WIDTH_ANNOTATE_DISPLAY,
+    #                 image_height=HEIGHT_ANNOTATE_DISPLAY,
+    #                 # item_selector=True,
+    #                 # read_only=True,
+    #                 edit_meta=True,
+    #                 bbox_show_label=True,
+    #                 key=key+"_popout",
+    #             )
+    #     if st.button("Submit"):
+    #         if(key == 'detection_dup1'):
+    #             if test_out["key"] != st.session_state.result_query_out["key"]:
+    #                 st.session_state.result_query_out["key"] = test_out["key"]
+    #                 st.session_state.result_query_out["bbox"] = test_out["bbox"]
+    #                 st.session_state.result = st.session_state.result_query_out["bbox"]
+    #         else:
+    #             if test_out["key"] != st.session_state.result_db_out["key"]:
+    #                 st.session_state.result_db_out["key"] = test_out["key"]
+    #                 st.session_state.result_db_out["bbox"] = test_out["bbox"]
+    #                 st.session_state.result = st.session_state.result_db_out["bbox"]
+    #         st.rerun()
 
-        if label_list == []:
-            label_list = ["deer", "human", "dog", "penguin", "flamingo", "teddy bear"]
+    @st.fragment
+    def display_detection_frame(self, bboxes_query, labels_query, bboxes_db, labels_db):
 
         if "result" not in st.session_state:
             st.session_state.result = []
                 
-        if "result_query_out" not in st.session_state:
+        if "result_query_out" not in st.session_state or st.session_state.new_detection:
             st.session_state.result_query_out = {"key": 0, "bbox": []}
             
-        if "result_db_out" not in st.session_state:
+        if "result_db_out" not in st.session_state or st.session_state.new_detection:
             st.session_state.result_db_out = {"key": 0, "bbox": []}
         
-        if "image_size" not in st.session_state:
-            st.session_state.image_size = [512, 512]
+        match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
+        query_idx: QueryIdx = match[0]
+        db_idx: DatabaseIdx = match[1]
+        query_img = self.page_state.warp_query_frames[query_idx] if self.page_state.warp else self.page_state.query_frames[query_idx]
+        database_img = self.page_state.db_frames[db_idx] if self.page_state.warp else self.page_state.db_frames[db_idx]
         
-        [query_img, database_img] = image_urls 
         bboxes = list(bboxes_query)+list(bboxes_db)
 
-        if len(bboxes) > 0:
+
+        if st.session_state.new_detection:
+            # generate query/database object labels
+            # find better way to do labels
+
+            label_to_query = lambda s : s + "_q"
+            label_to_db = lambda s : s +"_db"
+            labels_query = list(map(label_to_query, labels_query))
+            labels_db = list(map(label_to_db, labels_db))
+            label_list = list(set(list(labels_query) + list(labels_db)))
+
             bbox_ids = [str(uuid.uuid4()) for _ in bboxes]
             label_to_idx = lambda s : label_list.index(s)
             labels = list(map(label_to_idx, list(labels_query)+list(labels_db)))
-            st.session_state.result = [{"bboxes": bboxes[i], "bbox_ids": bbox_ids[i], "labels":labels[i], "label_names": label_list[labels[i]]} for i in range(len(bboxes))]
-
-            # meta_data = [item['meta_data'] for item in data]
+            meta_data = []
+            st.session_state.result = [{"bboxes": bboxes[i], "bbox_ids": bbox_ids[i], "labels":labels[i], "label_names": label_list[labels[i]],"meta_data": meta_data} for i in range(len(bboxes))]
             # info_dict = [item['info_dict'] for item in data]
         else:
             data = st.session_state.result
+            print(data)
             bboxes = [item['bboxes'] for item in data]
             bbox_ids = [item['bbox_ids'] for item in data]
+            meta_data = [item['meta_data'] for item in data]
+
             labels = [item['labels'] for item in data]
-            # meta_data = [item['meta_data'] for item in data]
+            label_list = list(set([item['label_names'] for item in data]))
+            # is_query = lambda x : x["label_names"][-1:] == 'q' 
+            # is_db = lambda x : x["label_names"][-2:] == 'db'
+
+            # bboxes_query = list(filter(is_query, st.session_state.result))
+            # bboxes_db = list(filter(is_db, st.session_state.result))
+            
+            # # update bboxes and labels at index
+            # if self.page_state.annotated_frame["idx"] != -1:
+            #     self.page_state.annotated_frame["bboxes_query"][ss.slider] = [item['bboxes'] for item in bboxes_query]
+            #     self.page_state.annotated_frame["bboxes_db"][ss.slider] = [item['bboxes'] for item in bboxes_db]
+            #     self.page_state.annotated_frame["labels_query"][ss.slider] = [item['label_names'] for item in bboxes_query]
+            #     self.page_state.annotated_frame["labels_db"][ss.slider] = [item['label_names'] for item in bboxes_db]
+
             # info_dict = [item['info_dict'] for item in data]
+        if label_list == []:
+            print("No objects detection, loading default labels...")
+            label_list = ["deer", "human", "dog", "penguin", "flamingo", "teddy bear"]
+
+        # if not st.session_state.edit_query and not st.session_state.edit_db:
+        
+        # st.button("Edit Database", on_click=self.toggle_db)
 
         c1, c2 = st.columns(2)
+        
         with c1: 
-            test_out1 = detection(
-                image_path=query_img,
-                bboxes=bboxes,
-                bbox_ids=bbox_ids,
-                bbox_format='REL_XYXY',
-                labels=labels,
-                # info_dict=info_dict,
-                # meta_data=meta_data,
-                label_list=label_list,
-                line_width=LINE_WIDTH_ANNOTATE_DISPLAY,
-                class_select_type="radio",
-                ui_position="left",
-                item_editor=True,
-                # item_selector=True,
-                edit_meta=True,
-                bbox_show_label=True,
-                key="detection_dup1",
-            )
+            # if st.button("Edit Query"):
+            #     test_out1 = self.detection_popout(query_img, bboxes, bbox_ids, labels, meta_data, label_list, "detection_dup1")
+            # else:
+                test_out1 = detection(
+                    image_path=query_img,
+                    bboxes=bboxes,
+                    bbox_ids=bbox_ids,
+                    bbox_format='REL_XYXY',
+                    labels=labels,
+                    # info_dict=info_dict,
+                    meta_data=meta_data,
+                    label_list=label_list,
+                    line_width=LINE_WIDTH_ANNOTATE_DISPLAY,
+                    class_select_type="radio",
+                    ui_position="left",
+                    item_editor=True,
+                    # item_selector=True,
+                    # read_only=True,
+                    edit_meta=True,
+                    bbox_show_label=True,
+                    key="detection_dup1",
+                )
 
         with c2:
-            test_out2 = detection(
-                image_path=database_img,
-                bboxes=bboxes,
-                bbox_ids=bbox_ids,
-                bbox_format='REL_XYXY',
-                labels=labels,
-                # info_dict=info_dict,
-                # meta_data=meta_data,
-                label_list=label_list,
-                line_width=LINE_WIDTH_ANNOTATE_DISPLAY,
-                class_select_type="radio",
-                ui_position="right",
-                # item_editor=True,
-                item_selector=True,
-                edit_meta=True,
-                bbox_show_label=True,
-                key="detection_dup2",
-            )
-
-        st.session_state.image_size = test_out1["resized_image_size"]
+            # if st.button("Edit Database"):
+            #     test_out2 = self.detection_popout(database_img, bboxes, bbox_ids, labels, meta_data, label_list, "detection_dup2")
+            # else:
+                test_out2 = detection(
+                    image_path=database_img,
+                    bboxes=bboxes,
+                    bbox_ids=bbox_ids,
+                    bbox_format='REL_XYXY',
+                    labels=labels,
+                    # info_dict=info_dict,
+                    meta_data=meta_data,
+                    label_list=label_list,
+                    line_width=LINE_WIDTH_ANNOTATE_DISPLAY,
+                    class_select_type="radio",
+                    ui_position="right",
+                    item_editor=True,
+                    # read_only=True,
+                    # item_selector=True,
+                    edit_meta=True,
+                    bbox_show_label=True,
+                    key="detection_dup2",
+                )
+        if (test_out1 == None or test_out2 == None):
+            return
         
-        if (test_out1["key"] != st.session_state.result_query_out["key"] or test_out2["key"] != st.session_state.result_db_out["key"]):
+        if (test_out1["key"] != st.session_state.result_query_out["key"] or test_out2["key"] != st.session_state.result_db_out["key"]) and not st.session_state.new_detection:
             if test_out1["key"] != st.session_state.result_query_out["key"]:
                 st.session_state.result_query_out["key"] = test_out1["key"]
                 st.session_state.result_query_out["bbox"] = test_out1["bbox"]
-
+                
             if test_out2["key"] != st.session_state.result_db_out["key"]:
                 st.session_state.result_db_out["key"] = test_out2["key"]
                 st.session_state.result_db_out["bbox"] = test_out2["bbox"]
-            
-            
-            if st.session_state.result_db_out["key"] > st.session_state.result_query_out["key"]:  
+
+            if st.session_state.result_db_out["key"] > st.session_state.result_query_out["key"]: 
                 st.session_state.result = st.session_state.result_db_out["bbox"]
             else:
                 st.session_state.result = st.session_state.result_query_out["bbox"]
+                
+            st.rerun(scope="fragment")
+        
+        st.session_state.new_detection = False
 
-            st.rerun()
+    def scale_masks(self, masks, width, height):
+        scaled_masks = []
+        for m in masks:
+            scaled_masks.append(skimage.transform.resize(m, (height, width), order=0, preserve_range=True, anti_aliasing=False).tolist())
+        return scaled_masks
 
-    @st.experimental_fragment
-    def display_segmentation_frame(self, image_urls, mask_query, labels_query, mask_db, labels_db):
-        # fix segmentation drawing, find a way to map individual segments to correct labels
-        label_to_query = lambda s : s + "_q"
-        label_to_db = lambda s : s +"_db"
-        labels_query = list(map(label_to_query, labels_query))
-        labels_db = list(map(label_to_db, labels_db))
-        label_list = list(set(list(labels_query) + list(labels_db)))
+    def toggle_query(self):
+        # st.session_state['edit_query'] = not st.session_state[st.session_state[f'edit_query_key']]
+        # st.session_state[f'edit_query_key'] = str(uuid.uuid4())
+        st.session_state.edit_query = not st.session_state.edit_query
+
+    def toggle_db(self):
+        # st.session_state['edit_db'] = not st.session_state[st.session_state[f'edit_db_key']]
+        # st.session_state[f'edit_db_key'] = str(uuid.uuid4())
+        st.session_state.edit_db = not st.session_state.edit_db
+
+    @st.fragment
+    def display_segmentation_frame(self, mask_query, mask_db):
+        label_names = [item['label_names'] for item in st.session_state.result] if st.session_state.result else []
+        label_list = list(set(label_names))
+        match: Match = self.page_state.matches[self.page_state[PLAY_IDX_KEY]]
+        query_idx: QueryIdx = match[0]
+        db_idx: DatabaseIdx = match[1]
+        query_img = self.page_state.warp_query_frames[query_idx] if self.page_state.warp else self.page_state.query_frames[query_idx]
+        database_img = self.page_state.db_frames[db_idx] if self.page_state.warp else self.page_state.db_frames[db_idx]
 
         if label_list == []:
-            label_list = ["car"]
+            print("Err: Did not run detection or no bounding boxes detected.")
+
+            label_list = ["object_query", "object_db"]
 
         if "seg_result" not in st.session_state:
             st.session_state.seg_result = []
 
-        if "seg_query_out" not in st.session_state:
+
+        if "seg_query_out" not in st.session_state or st.session_state.new_segment:
             st.session_state.seg_query_out = {"key": 0, "mask": []}
 
-        if "seg_db_out" not in st.session_state:
+        if "seg_db_out" not in st.session_state or st.session_state.new_segment:
             st.session_state.seg_db_out = {"key": 0, "mask": []}
-
-        [query_img, database_img] = image_urls 
-
+            
         masks = np.concatenate((mask_query, mask_db), axis=0).tolist()
 
-        if len(masks) > 0:
+        if st.session_state.new_segment:
             mask_ids = [str(uuid.uuid4()) for _ in masks]
             label_to_idx = lambda s : label_list.index(s)
-            labels = list(map(label_to_idx, list(labels_query)+list(labels_db)))
-            st.session_state.seg_result = [{"masks": masks[i], "mask_ids": mask_ids[i], "labels":labels[i], "label_names": label_list[labels[i]]} for i in range(len(masks))]
+            labels = list(map(label_to_idx, label_names))
+            st.session_state.seg_result = [{"masks": masks[i], "mask_ids": mask_ids[i], "labels":labels[i], "label_names": label_list[labels[i]]} for i in range(len(labels))]
 
             # meta_data = [item['meta_data'] for item in data]
             # info_dict = [item['info_dict'] for item in data]
@@ -414,23 +520,28 @@ class FrameDisplay:
             labels = [item['labels'] for item in data]
             # meta_data = [item['meta_data'] for item in data]
             # info_dict = [item['info_dict'] for item in data]
-
+        
         c1, c2 = st.columns(2)
+        masks = self.scale_masks(np.asarray(masks), WIDTH_SEGMENT_DEFAULT, HEIGHT_SEGMENT_DEFAULT)
+
         with c1: 
             seg_out1 = segmentation(
                 image_path=query_img,
                 masks=masks,
                 mask_ids=mask_ids,
                 labels=labels,
-                # bbox_format='XYWH',
-                # meta_data=meta_data,
                 label_list=label_list,
                 item_editor=True,
-                # item_selector=False,
                 edit_meta=True,
-                # auto_segmentation=True,
+                image_width=WIDTH_SEGMENT_DEFAULT,
+                image_height=HEIGHT_SEGMENT_DEFAULT,
+                # read_only=True,
                 key="seg_dup1",
             )
+            # end = time.time()
+            # print("display read-only: ", end-start)
+            # st.button("Edit Query", on_click=self.toggle_query)
+
         with c2:
             seg_out2 = segmentation(
                 image_path=database_img,
@@ -444,24 +555,33 @@ class FrameDisplay:
                 item_editor=True,
                 item_selector=True,
                 edit_meta=True,
+                # read_only=True,
+                image_width=WIDTH_SEGMENT_DEFAULT,
+                image_height=HEIGHT_SEGMENT_DEFAULT,
                 # auto_segmentation=True,
                 key="seg_dup2",
             )
+            # st.button("Edit Database", on_click=self.toggle_db)
 
-        if (seg_out1["key"] != st.session_state.seg_query_out["key"] or seg_out2["key"] != st.session_state.seg_db_out["key"]):
-
+        if (seg_out1["key"] != st.session_state.seg_query_out["key"] or seg_out2["key"] != st.session_state.seg_db_out["key"]) and not st.session_state.new_segment:
             if seg_out1["key"] != st.session_state.seg_query_out["key"]:
                 st.session_state.seg_query_out = seg_out1
 
             if seg_out2["key"] != st.session_state.seg_db_out["key"]:
                 st.session_state.seg_db_out = seg_out2
             
-            if st.session_state.seg_db_out["key"] > st.session_state.seg_query_out["key"]:  
-                st.session_state.seg_result = st.session_state.seg_db_out["mask"]
+            if st.session_state.seg_db_out["key"] > st.session_state.seg_query_out["key"]:
+                # self.page_state.annotated_frame["bboxes_db"] = []session_state.seg_query_out["key"]:  
+                st.session_state.seg_result = np.array(st.session_state.seg_db_out["mask"])
             else:
-                st.session_state.seg_result = st.session_state.seg_query_out["mask"]
+                st.session_state.seg_result = np.array(st.session_state.seg_query_out["mask"])
+            print("Refreshing in segmentation")
+            print(len(st.session_state.seg_query_out["mask"]))
 
-            st.rerun()
+            st.rerun(scope="fragment")
+        
+        st.session_state.new_segment = False
+
         
 
     def render(self):
@@ -470,8 +590,8 @@ class FrameDisplay:
         db_idx: DatabaseIdx = match[1]
         query: QueryVideo = self.page_state.query
         database: DatabaseVideo = self.page_state.database
-
-        bboxes_query = labels_query = bboxes_db = labels_db = mask_query = mask_db = []
+        bboxes_query, labels_query, bboxes_db, labels_db, mask_query, mask_db = [], [], [], [], [], []
+        
         match self.page_state.controller:
             case PlaybackController.name if self.page_state.warp:
                 query_img = self.page_state.warp_query_frames[query_idx]
@@ -483,25 +603,29 @@ class FrameDisplay:
                 database_img = self.page_state.annotated_frame["db"]
             case ObjectAnnotationController.name if self.page_state.annotated_frame[
                 "idx"
-            ] == ss.slider:
-                query_img = self.page_state.annotated_frame["query"]
-                database_img = self.page_state.annotated_frame["db"]
-                bboxes_query = self.page_state.annotated_frame["bboxes_query"]
+            ] != -1:
+                query_img = self.page_state.warp_query_frames[query_idx] if self.page_state.warp else self.page_state.query_frames[query_idx]
+                database_img = self.page_state.db_frames[db_idx] if self.page_state.warp else self.page_state.db_frames[db_idx]
+                print("New detection: ", st.session_state.new_detection)
+                print("New segment: ", st.session_state.new_segment)
                 labels_query = self.page_state.annotated_frame["labels_query"]
-                bboxes_db = self.page_state.annotated_frame["bboxes_db"]
                 labels_db = self.page_state.annotated_frame["labels_db"]
-                mask_query = self.page_state.annotated_frame["mask_query"]
-                mask_db = self.page_state.annotated_frame["mask_db"]
 
-                # clear bbox and mask data to prevent re-drawing
-                self.page_state.annotated_frame["bboxes_query"] = []
-                self.page_state.annotated_frame["bboxes_db"] = []
-                self.page_state.annotated_frame["mask_query"] = []
-                self.page_state.annotated_frame["mask_db"] = []
+                if(st.session_state.new_detection):
+                    bboxes_query = self.page_state.annotated_frame["bboxes_query"]
+                    bboxes_db = self.page_state.annotated_frame["bboxes_db"]
+                    st.session_state.is_segment = False
+                elif(st.session_state.new_segment):
+                    mask_query = self.page_state.annotated_frame["mask_query"]
+                    labels_query = self.page_state.annotated_frame["labels_query"]
+                    mask_db = self.page_state.annotated_frame["mask_db"]
+                    labels_db = self.page_state.annotated_frame["labels_db"]
+                    st.session_state.is_segment = True
 
             case ObjectDetectController.name if self.page_state.warp:
                 query_img = self.page_state.warp_query_frames[query_idx]
                 database_img = self.page_state.db_frames[db_idx]
+
             case ObjectAnnotationController.name if self.page_state.warp:
                 query_img = self.page_state.warp_query_frames[query_idx]
                 database_img = self.page_state.db_frames[db_idx]
@@ -511,7 +635,6 @@ class FrameDisplay:
 
         query_img_base64 = f"data:image/jpeg;base64,{get_base64(query_img)}"
         db_img_base64 = f"data:image/jpeg;base64,{get_base64(database_img)}"
-        image_urls = [query_img, database_img]
 
         labels = ["Query Frame: " + query.name,"Aligned Database Frame: " + database.name]
         images = [[query_img_base64], [query_img_base64, db_img_base64]]
@@ -522,7 +645,6 @@ class FrameDisplay:
         self.display_frame(
             labels=labels, 
             images=images, 
-            image_urls=image_urls,
             frame_lens=frame_lens, 
             idxs=idxs, 
             fps=fps,
